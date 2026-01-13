@@ -112,134 +112,124 @@ class SurveyUserInput(models.Model):
         raise UserError(_("No se ha generado el certificado PDF. No es posible registrar en Blockchain sin el documento inmutable."))
 
 
-    def _has_purchased_blockchain_variant(self, channel):
-        if not self.partner_id or not channel.product_id:
-            return False
-
-        attr_name = 'Certificación Blockchain'
-        attr_val_name = 'Certificado Blockchain'
-        
-        domain = [
-            ('order_partner_id', '=', self.partner_id.id),
-            ('state', 'in', ['sale', 'done']),
-            ('product_id.product_tmpl_id', '=', channel.product_id.product_tmpl_id.id)
-        ]
-        
-        sale_lines = self.env['sale.order.line'].sudo().search(domain)
-        
-        for line in sale_lines:
-            for ptav in line.product_id.product_template_attribute_value_ids:
-                if (ptav.attribute_id.name.lower() == attr_name.lower() and 
-                    ptav.name.lower() == attr_val_name.lower()):
-                    return True
-        return False
-
     def _should_certify_on_blockchain(self):
+        """
+        Determina si este intento debe ser registrado en blockchain.
+        Validación estricta basada en el slide de origen y los derechos de inscripción.
+        """
         self.ensure_one()
         
-        slides = self.env['slide.slide'].search([
-            ('survey_id', '=', self.survey_id.id),
-            ('slide_category', '=', 'certification'),
-            ('blockchain_certifiable', '=', True)
-        ])
-        
-        if not slides:
+        # 1. Validación de Contexto: Debe venir de un Slide específico
+        if not self.slide_id:
             return False
             
-        for slide in slides:
-            channel = slide.channel_id
-            if not channel.blockchain_certification_enabled:
-                continue
-                
-            if self._has_purchased_blockchain_variant(channel):
-                return True
-                
-        return False
+        # 2. Validación del Slide: Debe ser certificable
+        if self.slide_id.slide_category != 'certification' or not self.slide_id.blockchain_certifiable:
+            return False
+            
+        # 3. Validación del Canal: Debe tener la feature activa
+        channel = self.slide_id.channel_id
+        if not channel.blockchain_certification_enabled:
+            return False
+            
+        # 4. Validación de Derechos de Inscripción (Enrollment)
+        # Buscamos la inscripción específica del usuario en este curso.
+        # Esto desacopla la lógica de ventas y soporta cursos gratuitos o becados.
+        enrollment = self.env['slide.channel.partner'].sudo().search([
+            ('channel_id', '=', channel.id),
+            ('partner_id', '=', self.partner_id.id)
+        ], limit=1)
+        
+        if not enrollment:
+            return False
+            
+        # 5. Check Final: ¿Tiene derechos explícitos para este curso?
+        if enrollment.blockchain_certification_rights:
+            _logger.info("Blockchain Certification Approved for %s in Course %s", self.partner_id.name, channel.name)
+            return True
+        else:
+            _logger.info("Blockchain Certification Denied for %s in Course %s (No Rights)", self.partner_id.name, channel.name)
+            return False
 
     def _mark_done(self):
         """
         Override para manejar certificaciones blockchain de forma separada.
-        Evita la generación de PDFs duplicados por el envío de correos estándar.
         """
+        # 1. Separar flujos
         blockchain_records = self.filtered(lambda r: r._should_certify_on_blockchain())
         regular_records = self - blockchain_records
         
-        # 1. Procesar registros normales con lógica estándar
+        # 2. Procesar registros NORMALES (Lógica nativa completa)
         res = super(SurveyUserInput, regular_records)._mark_done()
         
         if not blockchain_records:
             return res
             
-        # 2. Procesar registros Blockchain (Custom Logic)
-        # Copiamos la lógica base pero modificamos el envío de correo y gestión de reporte
+        # 3. Procesar registros BLOCKCHAIN (Lógica Mirror + Custom)
+        # Replicamos la lógica de _mark_done pero controlando el email
         blockchain_records.write({
-            'end_datetime': fields.Datetime.now(),
             'state': 'done',
+            'end_datetime': fields.Datetime.now(),
         })
         
-        Challenge_sudo = self.env['gamification.challenge'].sudo()
-        badge_ids = []
-        blockchain_records._notify_new_participation_subscribers()
-        
         for user_input in blockchain_records:
-            if user_input.survey_id.certification and user_input.scoring_success:
+            # Gamification (Standard Logic Replication)
+            if user_input.scoring_success:
+                if hasattr(user_input, '_check_certification_badges'):
+                    user_input._check_certification_badges()
                 
                 # --- BLOCKCHAIN PROCESS ---
                 try:
-                    # A. Generar PDF Inmutable (y borrar duplicados automáticos)
                     user_input._generate_and_store_certificate()
-                    # B. Registrar en Blockchain
                     user_input.action_blockchain_register()
                 except Exception as e:
-                    _logger.error('Error proceso blockchain en _mark_done: %s', e, exc_info=True)
+                    _logger.error('Error bloqueo proceso blockchain: %s', e, exc_info=True)
 
                 # --- CUSTOM EMAIL SENDING ---
-                # Usamos el adjunto inmutable y enviamos via message_post para evitar
-                # que el template genere un NUEVO reporte dinámico.
+                # Enviamos email usando el template, pero interceptamos el mail creado
+                # para inyectar el PDF inmutable antes de enviarlo.
                 if user_input.survey_id.certification_mail_template_id and not user_input.test_entry:
                     template = user_input.survey_id.certification_mail_template_id
                     immutable_att = user_input._get_immutable_certificate_attachment()
                     
-                    # Preparar valores del correo
-                    email_values = {
-                        'email_to': user_input.email or user_input.partner_id.email,
-                        'email_from': template.email_from,
-                    }
-                    # Renderizar asunto y cuerpo
-                    subject = template._render_field('subject', [user_input.id])[user_input.id]
-                    body = template._render_field('body_html', [user_input.id], compute_lang=True)[user_input.id]
-                    
-                    # Adjuntar SOLO el inmutable (más adjuntos estáticos del template si los hubiera)
-                    attachment_ids = [immutable_att.id] if immutable_att else []
-                    
-                    # Enviar usando message_post (Nativo: Log en Chatter + Email)
-                    # Usamos OdooBot (SUPERUSER_ID) como autor para asegurar que 
-                    # el usuario (que es quien ejecuta la acción) reciba la notificación.
-                    from odoo import SUPERUSER_ID
-                    
-                    # Preparar adjuntos (Lista de IDs simple, message_post NO acepta comandos)
-                    attachment_ids = [immutable_att.id] if immutable_att else []
-                    
-                    user_input.with_context(mail_notify_force_send=True).message_post(
-                        body=body,
-                        subject=subject,
-                        author_id=self.env.ref('base.partner_root').id or SUPERUSER_ID,
-                        subtype_xmlid='mail.mt_comment',
-                        message_type='comment',
-                        partner_ids=[user_input.partner_id.id] if user_input.partner_id else [],
-                        attachment_ids=attachment_ids,
-                    )
+                    try:
+                        # 1. Crear el mail sin enviarlo (force_send=False)
+                        # Esto genera el mail usando toda la lógica estándar (idiomas, destinatarios)
+                        mail_id = template.send_mail(user_input.id, force_send=False, raise_exception=True)
+                        
+                        if mail_id:
+                            mail = self.env['mail.mail'].sudo().browse(mail_id)
+                            
+                            # Validar destinatario para log antes de que se borre el mail
+                            email_to_log = mail.email_to or (mail.recipient_ids.mapped('name') if mail.recipient_ids else "Unknown")
+                            
+                            # 2. Reemplazar adjuntos: Forzar SOLO el inmutable
+                            # Detectar y borrar adjuntos "basura" generados por el template (el reporte dinámico)
+                            # para que no ensucien el chatter ni se envíen.
+                            garbage_attachments = mail.attachment_ids
+                            
+                            if immutable_att:
+                                # Reemplazamos los adjuntos del mail por el nuestro
+                                mail.write({
+                                    'attachment_ids': [(6, 0, [immutable_att.id])]
+                                })
+                                # Eliminamos los anteriores de la base de datos
+                                if garbage_attachments:
+                                    # Filtramos para no borrar el inmutable si por azar estuviera ahí
+                                    to_delete = garbage_attachments - immutable_att
+                                    if to_delete:
+                                        _logger.info("Eliminando %s adjuntos duplicados generados por el template.", len(to_delete))
+                                        to_delete.unlink()
+                                
+                                _logger.info("Adjunto inmutable inyectado en mail ID: %s", mail_id)
+                            
+                            # 3. Enviar ahora
+                            mail.send(raise_exception=True)
+                            _logger.info("Email Blockchain enviado exitosamente a: %s", email_to_log)
+                        else:
+                            _logger.warning("Template.send_mail no retornó ID para el usuario %s", user_input.id)
+                        
+                    except Exception as email_error:
+                        _logger.error("Error enviando email blockchain: %s", email_error, exc_info=True)
 
-                if user_input.survey_id.certification_give_badge:
-                    badge_ids.append(user_input.survey_id.certification_badge_id.id)
-
-            # Update predefined_question_id to remove inactive questions
-            user_input.predefined_question_ids -= user_input._get_inactive_conditional_questions()
-
-        # Gamification Update (Standard)
-        if badge_ids:
-            challenges = Challenge_sudo.search([('reward_id', 'in', badge_ids)])
-            if challenges:
-                Challenge_sudo._cron_update(ids=challenges.ids, commit=False)
-                
         return res

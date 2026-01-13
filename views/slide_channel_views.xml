@@ -8,11 +8,14 @@
             <xpath expr="//page[@name='options']" position="inside">
                 <group string="Certificación Blockchain" name="blockchain_certification">
                     <group>
-                        <field name="blockchain_certification_enabled" widget="boolean_toggle"/>
+                        <field name="blockchain_certification_enabled" 
+                               widget="boolean_toggle"
+                               readonly="enroll == 'payment' and not product_id"/>
                     </group>
                     <group>
                         <field name="blockchain_certification_price" 
                                invisible="not blockchain_certification_enabled"
+                               readonly="not product_id"
                                widget="monetary"/>
                     </group>
                 </group>

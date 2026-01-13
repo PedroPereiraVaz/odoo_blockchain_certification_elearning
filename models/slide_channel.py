@@ -26,6 +26,42 @@ class SlideChannel(models.Model):
         default=0.0,
     )
     
+    @api.onchange('blockchain_certification_enabled', 'enroll', 'product_id', 'blockchain_certification_price')
+    def _onchange_blockchain_config_validation(self):
+        """
+        Valida configuración de blockchain.
+        1. Curso de pago sin producto -> No activar.
+        2. Sin producto -> No precio extra.
+        """
+        for record in self:
+            # Caso 1: Curso Pago activado sin producto
+            if record.enroll == 'payment' and not record.product_id and record.blockchain_certification_enabled:
+                record.blockchain_certification_enabled = False
+                return {
+                    'warning': {
+                        'title': _('Configuración Incompleta'),
+                        'message': _('Para habilitar la certificación blockchain en cursos de pago, primero debe seleccionar un Producto asociado.')
+                    }
+                }
+            
+            # Caso 2: Precio extra sin producto (Imposible cobrar)
+            if not record.product_id and record.blockchain_certification_price > 0:
+                record.blockchain_certification_price = 0.0
+                return {
+                    'warning': {
+                        'title': _('Precio no permitido'),
+                        'message': _('No puede establecer un precio para la certificación si el curso no tiene un producto asociado. Sin un producto, no existen variantes para gestionar el cobro.')
+                    }
+                }
+
+    @api.constrains('blockchain_certification_enabled', 'enroll', 'product_id', 'blockchain_certification_price')
+    def _check_blockchain_config_integrity(self):
+        for record in self:
+            if record.enroll == 'payment' and not record.product_id and record.blockchain_certification_enabled:
+                raise UserError(_('No puede habilitar la certificación blockchain en un curso de pago sin asignar un producto.'))
+            if not record.product_id and record.blockchain_certification_price > 0:
+                raise UserError(_('No puede establecer un precio extra de certificación sin tener un producto asociado al curso.'))
+    
     # -------------------------------------------------------------------------
     # GESTIÓN DE VARIANTES
     # -------------------------------------------------------------------------
@@ -132,3 +168,23 @@ class SlideChannel(models.Model):
             if record.blockchain_certification_enabled and record.product_id:
                 record._update_product_variants()
         return records
+
+    def _action_add_members(self, target_partners):
+        """
+        Override para gestionar derechos de blockchain en inscripciones gratuitas/automáticas.
+        """
+        res = super(SlideChannel, self)._action_add_members(target_partners)
+        
+        # Lógica para Cursos/Certificados Gratuitos
+        # Si la certificación está habilitada y el precio extra es 0, todos los inscritos
+        # reciben el derecho automáticamente (ej: cursos públicos o gratuitos).
+        for channel in self:
+            if channel.blockchain_certification_enabled and channel.blockchain_certification_price == 0:
+                # Buscar los enrollments recién creados/actualizados para estos partners
+                enrollments = self.env['slide.channel.partner'].sudo().search([
+                    ('channel_id', '=', channel.id),
+                    ('partner_id', 'in', target_partners.ids)
+                ])
+                enrollments.write({'blockchain_certification_rights': True})
+                
+        return res
