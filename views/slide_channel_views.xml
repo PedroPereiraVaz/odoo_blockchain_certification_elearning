@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_slide_channel_form_blockchain" model="ir.ui.view">
+        <field name="name">slide.channel.form.blockchain.certification</field>
+        <field name="model">slide.channel</field>
+        <field name="inherit_id" ref="website_slides.view_slide_channel_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='options']" position="inside">
+                <group string="Certificación Blockchain" name="blockchain_certification">
+                    <group>
+                        <field name="blockchain_certification_enabled" widget="boolean_toggle"/>
+                    </group>
+                    <group>
+                        <field name="blockchain_certification_price" 
+                               invisible="not blockchain_certification_enabled"
+                               widget="monetary"/>
+                    </group>
+                </group>
+            </xpath>
+        </field>
+    </record>
+</odoo>

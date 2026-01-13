@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 
+        Extensión de la vista de slides (contenido del curso) para añadir
+        el campo blockchain_certifiable en slides de tipo certificación.
+        
+        Similar a como website_slides_survey añade survey_id.
+    -->
+    
+    <!-- 1. Vista de formulario slide.slide - añadir blockchain_certifiable -->
+    <record id="view_slide_slide_form_blockchain" model="ir.ui.view">
+        <field name="name">slide.slide.view.form.blockchain</field>
+        <field name="model">slide.slide</field>
+        <field name="inherit_id" ref="website_slides_survey.slide_slide_view_form"/>
+        <field name="arch" type="xml">
+            <!-- Añadir campo blockchain_certifiable después de survey_id en el formulario -->
+            <xpath expr="//field[@name='survey_id']" position="after">
+                <field name="blockchain_certifiable"
+                    string="Registrar en Blockchain"
+                    widget="boolean_toggle"
+                    invisible="slide_category != 'certification'"/>
+            </xpath>
+        </field>
+    </record>
+    
+    <!-- 2. Vista lista en el canal - añadir columna blockchain -->
+    <record id="view_slide_channel_form_blockchain_column" model="ir.ui.view">
+        <field name="name">slide.channel.form.blockchain.slide.column</field>
+        <field name="model">slide.channel</field>
+        <field name="inherit_id" ref="website_slides_survey.slide_channel_view_form"/>
+        <field name="arch" type="xml">
+            <!-- Añadir campo blockchain_certifiable después de survey_id en la lista de slides -->
+            <xpath expr="//field[@name='survey_id']" position="after">
+                <field name="blockchain_certifiable"
+                       string="Blockchain"
+                       invisible="slide_category != 'certification'"/>
+            </xpath>
+        </field>
+    </record>
+    
+</odoo>

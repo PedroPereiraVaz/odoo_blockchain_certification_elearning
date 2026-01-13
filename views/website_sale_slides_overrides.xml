@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- 
+        Override de la confirmación de compra para mostrar el curso adquirido
+        incluso si se compró una variante (ej: Con Certificación Blockchain)
+        que no está enlazada directamente en slide.channel, sino vía template.
+    -->
+    <template id="blockchain_course_purchased_confirmation_override" inherit_id="website_sale_slides.course_purchased_confirmation_message">
+        <!-- Reemplazamos el loop que busca channels solo en el product_id -->
+        <xpath expr="//div[@t-foreach='line.product_id.channel_ids']" position="replace">
+            <!-- 
+                Buscamos en TODOS los canales vinculados a CUALQUIER variante del template del producto comprado.
+                product_id -> product_tmpl_id -> product_variant_ids -> channel_ids
+                Esto cubre el caso donde el Slide Channel apunta a la variante "Estándar" pero compramos "Certificado".
+            -->
+            <div t-foreach="line.product_id.product_tmpl_id.product_variant_ids.mapped('channel_ids')" t-as="course" class="row mx-0 my-2 border">
+                <div class="col-5 d-flex justify-content-center my-auto">
+                    <span t-if="course.image_1920" t-field="course.image_1920" t-options="{'widget': 'image', 'class': 'my-2'}"/>
+                    <img t-else="" class="img img-fluid my-2" src="/website_slides/static/src/img/channel-training-default.jpg"/>
+                </div>
+                <!-- 
+                   Corrección KeyError: course_memberships no existe en el contexto si el controlador estándar
+                   no detectó cursos (debido a la variante). 
+                   Usamos directamente course.website_url, que funciona porque el usuario ya fue inscrito en _action_confirm.
+                -->
+                <t t-set="invitation_link" t-value="course.website_url"/>
+                
+                <div class="col-7">
+                    <a t-att-href="invitation_link"><h3 t-out="course.name" class="m-2"/></a>
+                    <div t-out="course.description_short" class="fw-light o_wslides_desc_truncate_2 ms-2"/>
+                    <div class="fw-light ms-2 mt-2">
+                        <t t-out="course.total_time" t-options="{'widget': 'duration', 'unit': 'hour', 'round': 'minute'}"/>
+                        <t t-if="course.total_slides">
+                           <t t-if="course.total_time"> - </t><t t-out="course.total_slides"/> step(s)
+                        </t>
+                    </div>
+                    <a role="button" class="btn btn-primary ms-2 my-2" t-att-href="invitation_link">
+                        Start Learning
+                    </a>
+                </div>
+            </div>
+        </xpath>
+    </template>
+
+    <!-- Override del carrito de compra (Checkout) -->
+    <template id="blockchain_cart_summary_inherit" inherit_id="website_sale_slides.cart_summary_inherit_website_sale_slides">
+        <xpath expr="//div[@t-if='line.product_id.channel_ids']" position="replace">
+            <t t-set="related_channels" t-value="line.product_id.product_tmpl_id.product_variant_ids.mapped('channel_ids').filtered(lambda c: c.enroll == 'payment')"/>
+            <div t-if="related_channels"
+                 t-foreach="related_channels"
+                 t-as="course"
+                 t-esc="course.name"/>
+        </xpath>
+    </template>
+</odoo>

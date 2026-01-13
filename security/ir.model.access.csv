@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_slide_channel_blockchain,slide.channel blockchain access,website_slides.model_slide_channel,base.group_user,1,0,0,0
+access_slide_slide_blockchain,slide.slide blockchain access,website_slides.model_slide_slide,base.group_user,1,0,0,0
+access_survey_user_input_blockchain,survey.user_input blockchain access,survey.model_survey_user_input,base.group_user,1,0,0,0
