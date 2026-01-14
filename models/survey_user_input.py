@@ -4,6 +4,7 @@ import hashlib
 import logging
 import json
 import base64
+from markupsafe import Markup
 
 _logger = logging.getLogger(__name__)
 
@@ -153,83 +154,102 @@ class SurveyUserInput(models.Model):
 
     def _mark_done(self):
         """
-        Override para manejar certificaciones blockchain de forma separada.
+        Sobrescribe _mark_done para usar la lógica nativa de Odoo (colas, templates, chatter)
+        pero inyectando nuestro PDF inmutable en lugar del dinámico.
         """
-        # 1. Separar flujos
-        blockchain_records = self.filtered(lambda r: r._should_certify_on_blockchain())
-        regular_records = self - blockchain_records
+        # 1. PROCESO STANDARD
+        # Llamamos primero a super para que Odoo calcule puntuaciones y determine si pasó.
+        res = super(SurveyUserInput, self)._mark_done()
         
-        # 2. Procesar registros NORMALES (Lógica nativa completa)
-        res = super(SurveyUserInput, regular_records)._mark_done()
+        # 2. LÓGICA BLOCKCHAIN & VISIBILIDAD (Solo si Standard ya terminó)
+        # Pre-calculamos IDs necesarios
+        comment_subtype_id = self.env.ref('mail.mt_comment').id
         
-        if not blockchain_records:
-            return res
+        for user_input in self:
+            # CHECK: Solo procedemos si el intento fue EXITOSO (Aprobó)
+            if not user_input.scoring_success:
+                continue
+
+            # Determinar si aplica Blockchain
+            is_blockchain = user_input._should_certify_on_blockchain()
             
-        # 3. Procesar registros BLOCKCHAIN (Lógica Mirror + Custom)
-        # Replicamos la lógica de _mark_done pero controlando el email
-        blockchain_records.write({
-            'state': 'done',
-            'end_datetime': fields.Datetime.now(),
-        })
-        
-        for user_input in blockchain_records:
-            # Gamification (Standard Logic Replication)
-            if user_input.scoring_success:
-                if hasattr(user_input, '_check_certification_badges'):
-                    user_input._check_certification_badges()
-                
-                # --- BLOCKCHAIN PROCESS ---
+            # --- GENERACIÓN Y REGISTRO BLOCKCHAIN ---
+            if is_blockchain:
                 try:
+                    # Generamos el certificado AHORA, sabiendo que aprobó.
                     user_input._generate_and_store_certificate()
+                    # Registramos transacción
                     user_input.action_blockchain_register()
                 except Exception as e:
-                    _logger.error('Error bloqueo proceso blockchain: %s', e, exc_info=True)
+                    _logger.error('Error proceso blockchain en _mark_done: %s', e)
 
-                # --- CUSTOM EMAIL SENDING ---
-                # Enviamos email usando el template, pero interceptamos el mail creado
-                # para inyectar el PDF inmutable antes de enviarlo.
-                if user_input.survey_id.certification_mail_template_id and not user_input.test_entry:
-                    template = user_input.survey_id.certification_mail_template_id
-                    immutable_att = user_input._get_immutable_certificate_attachment()
+        # 3. POST-PROCESO: Interceptación, Canje y Visibilidad
+        for user_input in self:
+            # Buscamos el correo recién creado en cola
+            last_mail = self.env['mail.mail'].sudo().search([
+                ('model', '=', 'survey.user_input'),
+                ('res_id', '=', user_input.id),
+                ('state', '=', 'outgoing')
+            ], order='create_date desc', limit=1)
+
+            is_blockchain = user_input._should_certify_on_blockchain()
+
+            # Caso Blockchain: SWAP + Visibilidad Garantizada
+            if is_blockchain and user_input.scoring_success:
+                immutable_att = user_input._get_immutable_certificate_attachment()
+                
+                if immutable_att and last_mail:
+                    _logger.info("Interceptado Mail ID %s para inyección (Blockchain).", last_mail.id)
                     
-                    try:
-                        # 1. Crear el mail sin enviarlo (force_send=False)
-                        # Esto genera el mail usando toda la lógica estándar (idiomas, destinatarios)
-                        mail_id = template.send_mail(user_input.id, force_send=False, raise_exception=True)
-                        
-                        if mail_id:
-                            mail = self.env['mail.mail'].sudo().browse(mail_id)
-                            
-                            # Validar destinatario para log antes de que se borre el mail
-                            email_to_log = mail.email_to or (mail.recipient_ids.mapped('name') if mail.recipient_ids else "Unknown")
-                            
-                            # 2. Reemplazar adjuntos: Forzar SOLO el inmutable
-                            # Detectar y borrar adjuntos "basura" generados por el template (el reporte dinámico)
-                            # para que no ensucien el chatter ni se envíen.
-                            garbage_attachments = mail.attachment_ids
-                            
-                            if immutable_att:
-                                # Reemplazamos los adjuntos del mail por el nuestro
-                                mail.write({
-                                    'attachment_ids': [(6, 0, [immutable_att.id])]
-                                })
-                                # Eliminamos los anteriores de la base de datos
-                                if garbage_attachments:
-                                    # Filtramos para no borrar el inmutable si por azar estuviera ahí
-                                    to_delete = garbage_attachments - immutable_att
-                                    if to_delete:
-                                        _logger.info("Eliminando %s adjuntos duplicados generados por el template.", len(to_delete))
-                                        to_delete.unlink()
-                                
-                                _logger.info("Adjunto inmutable inyectado en mail ID: %s", mail_id)
-                            
-                            # 3. Enviar ahora
-                            mail.send(raise_exception=True)
-                            _logger.info("Email Blockchain enviado exitosamente a: %s", email_to_log)
-                        else:
-                            _logger.warning("Template.send_mail no retornó ID para el usuario %s", user_input.id)
-                        
-                    except Exception as email_error:
-                        _logger.error("Error enviando email blockchain: %s", email_error, exc_info=True)
+                    # 1. Swap en correo (Lo que le llega al usuario)
+                    last_mail.write({'attachment_ids': [(6, 0, [immutable_att.id])]})
+
+                    # 2. Visibilidad Garantizada en Chatter
+                    if last_mail.body_html or last_mail.body:
+                        user_input.message_post(
+                            body=Markup(last_mail.body_html or last_mail.body),
+                            attachment_ids=[immutable_att.id],
+                            subtype_xmlid='mail.mt_comment',
+                            message_type='comment'
+                        )
+                    
+                    # 3. Limpiar basura dinamica
+                    garbage = self.env['ir.attachment'].sudo().search([
+                        ('res_model', '=', 'survey.user_input'),
+                        ('res_id', '=', user_input.id),
+                        ('name', '=', 'certification.pdf'),
+                        ('id', '!=', immutable_att.id)
+                    ])
+                    if garbage:
+                        garbage.unlink()
+
+            # Caso Standard: Solo Visibilidad + Limpieza Safe
+            elif user_input.scoring_success:
+                # Visibilidad en Chatter
+                # Replicamos el contenido del correo en el chatter si Odoo no lo hizo visible.
+                if last_mail and (last_mail.body_html or last_mail.body):
+                     user_input.message_post(
+                        body=Markup(last_mail.body_html or last_mail.body),
+                        # Usamos el adjunto original del correo (debería ser el PDF standard)
+                        attachment_ids=[att.id for att in last_mail.attachment_ids],
+                        subtype_xmlid='mail.mt_comment',
+                        message_type='comment'
+                    )
+
+                # Limpieza de duplicados
+                garbage_standard = self.env['ir.attachment'].sudo().search([
+                    ('res_model', '=', 'survey.user_input'),
+                    ('res_id', '=', user_input.id),
+                    ('name', '=', 'certification.pdf')
+                ])
+                for att in garbage_standard:
+                    other_count = self.env['ir.attachment'].sudo().search_count([
+                        ('res_model', '=', 'survey.user_input'),
+                        ('res_id', '=', att.res_id),
+                        ('id', '!=', att.id)
+                    ])
+                    if other_count > 0:
+                        _logger.info("Limpieza Standard: Eliminando duplicado ID %s", att.id)
+                        att.unlink()
 
         return res
