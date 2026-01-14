@@ -1,0 +1,198 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+# 	* elearning_blockchain_certification
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 18.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-01-14 13:34+0000\n"
+"PO-Revision-Date: 2026-01-14 13:34+0000\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: \n"
+"Plural-Forms: \n"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,help:elearning_blockchain_certification.field_slide_channel__blockchain_certification_enabled
+msgid ""
+"Activa una variante en el producto del curso para incluir certificación "
+"blockchain."
+msgstr ""
+"Activa una variante en el producto del curso para incluir certificación "
+"blockchain."
+
+#. module: elearning_blockchain_certification
+#: model_terms:ir.ui.view,arch_db:elearning_blockchain_certification.view_slide_channel_form_blockchain_column
+msgid "Blockchain"
+msgstr "Blockchain"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,field_description:elearning_blockchain_certification.field_survey_user_input__blockchain_entry_id
+msgid "Blockchain Entry"
+msgstr "Entrada Blockchain"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,field_description:elearning_blockchain_certification.field_survey_user_input__blockchain_status
+msgid "Blockchain Status"
+msgstr "Estado Blockchain"
+
+#. module: elearning_blockchain_certification
+#: model_terms:ir.ui.view,arch_db:elearning_blockchain_certification.view_slide_channel_form_blockchain
+msgid "Certificación Blockchain"
+msgstr "Certificación Blockchain"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,field_description:elearning_blockchain_certification.field_slide_channel__blockchain_certification_enabled
+msgid "Certificación Blockchain Habilitada"
+msgstr "Certificación Blockchain Habilitada"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model,name:elearning_blockchain_certification.model_slide_channel_partner
+msgid "Channel / Partners (Members)"
+msgstr "Canal/contactos (miembros)"
+
+#. module: elearning_blockchain_certification
+#. odoo-python
+#: code:addons/elearning_blockchain_certification/models/slide_channel.py:0
+msgid "Configuración Incompleta"
+msgstr "Configuración Incompleta"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model,name:elearning_blockchain_certification.model_slide_channel
+msgid "Course"
+msgstr "Curso"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,field_description:elearning_blockchain_certification.field_slide_channel_partner__blockchain_certification_rights
+msgid "Derechos de Certificación Blockchain"
+msgstr "Derechos de Certificación Blockchain"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,field_description:elearning_blockchain_certification.field_survey_user_input__blockchain_hash
+msgid "Document Hash"
+msgstr "Hash del Documento"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,field_description:elearning_blockchain_certification.field_survey_user_input__blockchain_certificate_hash
+msgid "Hash del Certificado"
+msgstr "Hash del Certificado"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,help:elearning_blockchain_certification.field_slide_channel_partner__blockchain_certification_rights
+msgid ""
+"Indica si este alumno tiene derecho a recibir un certificado blockchain en "
+"este curso."
+msgstr ""
+"Indica si este alumno tiene derecho a recibir un certificado blockchain en "
+"este curso."
+
+#. module: elearning_blockchain_certification
+#. odoo-python
+#: code:addons/elearning_blockchain_certification/models/slide_channel.py:0
+msgid ""
+"No puede establecer un precio extra de certificación sin tener un producto "
+"asociado al curso."
+msgstr ""
+"No puede establecer un precio extra de certificación sin tener un producto "
+"asociado al curso."
+
+#. module: elearning_blockchain_certification
+#. odoo-python
+#: code:addons/elearning_blockchain_certification/models/slide_channel.py:0
+msgid ""
+"No puede establecer un precio para la certificación si el curso no tiene un "
+"producto asociado. Sin un producto, no existen variantes para gestionar el "
+"cobro."
+msgstr ""
+"No puede establecer un precio para la certificación si el curso no tiene un "
+"producto asociado. Sin un producto, no existen variantes para gestionar el "
+"cobro."
+
+#. module: elearning_blockchain_certification
+#. odoo-python
+#: code:addons/elearning_blockchain_certification/models/slide_channel.py:0
+msgid ""
+"No puede habilitar la certificación blockchain en un curso de pago sin "
+"asignar un producto."
+msgstr ""
+"No puede habilitar la certificación blockchain en un curso de pago sin "
+"asignar un producto."
+
+#. module: elearning_blockchain_certification
+#. odoo-python
+#: code:addons/elearning_blockchain_certification/models/survey_user_input.py:0
+msgid ""
+"No se ha generado el certificado PDF. No es posible registrar en Blockchain "
+"sin el documento inmutable."
+msgstr ""
+"No se ha generado el certificado PDF. No es posible registrar en Blockchain "
+"sin el documento inmutable."
+
+#. module: elearning_blockchain_certification
+#. odoo-python
+#: code:addons/elearning_blockchain_certification/models/slide_channel.py:0
+msgid ""
+"Para habilitar la certificación blockchain en cursos de pago, primero debe "
+"seleccionar un Producto asociado."
+msgstr ""
+"Para habilitar la certificación blockchain en cursos de pago, primero debe "
+"seleccionar un Producto asociado."
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,field_description:elearning_blockchain_certification.field_slide_channel__blockchain_certification_price
+msgid "Precio Extra Certificación"
+msgstr "Precio Extra Certificación"
+
+#. module: elearning_blockchain_certification
+#. odoo-python
+#: code:addons/elearning_blockchain_certification/models/slide_channel.py:0
+msgid "Precio no permitido"
+msgstr "Precio no permitido"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,field_description:elearning_blockchain_certification.field_slide_slide__blockchain_certifiable
+#: model_terms:ir.ui.view,arch_db:elearning_blockchain_certification.view_slide_slide_form_blockchain
+msgid "Registrar en Blockchain"
+msgstr "Registrar en Blockchain"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,help:elearning_blockchain_certification.field_survey_user_input__blockchain_hash
+msgid "SHA256/Keccak256 hash of the document content."
+msgstr "Hash SHA256/Keccak256 del contenido del documento."
+
+#. module: elearning_blockchain_certification
+#: model:ir.model,name:elearning_blockchain_certification.model_sale_order
+msgid "Sales Order"
+msgstr "Pedido de venta"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model.fields,help:elearning_blockchain_certification.field_slide_slide__blockchain_certifiable
+msgid ""
+"Si está activo y el alumno ha comprado la certificación blockchain, el "
+"certificado se registrará automáticamente en blockchain al aprobar."
+msgstr ""
+"Si está activo y el alumno ha comprado la certificación blockchain, el "
+"certificado se registrará automáticamente en blockchain al aprobar."
+
+#. module: elearning_blockchain_certification
+#: model:ir.model,name:elearning_blockchain_certification.model_slide_slide
+msgid "Slides"
+msgstr "Diapositivas"
+
+#. module: elearning_blockchain_certification
+#: model_terms:ir.ui.view,arch_db:elearning_blockchain_certification.blockchain_course_purchased_confirmation_override
+msgid "Start Learning"
+msgstr "Comenzar"
+
+#. module: elearning_blockchain_certification
+#: model:ir.model,name:elearning_blockchain_certification.model_survey_user_input
+msgid "Survey User Input"
+msgstr "Entrada de usuario de la encuesta"
+
+#. module: elearning_blockchain_certification
+#: model_terms:ir.ui.view,arch_db:elearning_blockchain_certification.blockchain_course_purchased_confirmation_override
+msgid "step(s)"
+msgstr "paso(s)"
