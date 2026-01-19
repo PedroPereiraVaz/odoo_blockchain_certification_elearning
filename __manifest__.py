@@ -21,7 +21,8 @@
         'website_sale_slides',  
         'survey',
         'sale',
-        'odoo_blockchain_core'
+        'odoo_blockchain_core',
+        'elearning_academy'
     ],
     'data': [
         'security/ir.model.access.csv',

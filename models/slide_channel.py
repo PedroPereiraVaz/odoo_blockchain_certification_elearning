@@ -30,37 +30,15 @@ class SlideChannel(models.Model):
     def _onchange_blockchain_config_validation(self):
         """
         Valida configuración de blockchain.
-        1. Curso de pago sin producto -> No activar.
-        2. Sin producto -> No precio extra.
+        Mantenemos advertencias mínimas, pero la automatización ahora se encarga de crear el producto si falta.
         """
         for record in self:
-            # Caso 1: Curso Pago activado sin producto
-            if record.enroll == 'payment' and not record.product_id and record.blockchain_certification_enabled:
-                record.blockchain_certification_enabled = False
-                return {
-                    'warning': {
-                        'title': _('Configuración Incompleta'),
-                        'message': _('Para habilitar la certificación blockchain en cursos de pago, primero debe seleccionar un Producto asociado.')
-                    }
-                }
-            
-            # Caso 2: Precio extra sin producto (Imposible cobrar)
-            if not record.product_id and record.blockchain_certification_price > 0:
-                record.blockchain_certification_price = 0.0
-                return {
-                    'warning': {
-                        'title': _('Precio no permitido'),
-                        'message': _('No puede establecer un precio para la certificación si el curso no tiene un producto asociado. Sin un producto, no existen variantes para gestionar el cobro.')
-                    }
-                }
+            # Si se habilita con precio pero no hay producto, avisamos que se creará uno
+            if record.blockchain_certification_enabled and not record.product_id:
+                 _logger.info("Se creará un producto automáticamente para la certificación blockchain de '%s'", record.name)
 
-    @api.constrains('blockchain_certification_enabled', 'enroll', 'product_id', 'blockchain_certification_price')
-    def _check_blockchain_config_integrity(self):
-        for record in self:
-            if record.enroll == 'payment' and not record.product_id and record.blockchain_certification_enabled:
-                raise UserError(_('No puede habilitar la certificación blockchain en un curso de pago sin asignar un producto.'))
-            if not record.product_id and record.blockchain_certification_price > 0:
-                raise UserError(_('No puede establecer un precio extra de certificación sin tener un producto asociado al curso.'))
+    # Eliminamos las restricciones estrictas que impedían habilitar blockchain sin producto previo,
+    # ya que ahora el sistema lo creará automáticamente si es necesario.
     
     # -------------------------------------------------------------------------
     # GESTIÓN DE VARIANTES
@@ -153,20 +131,52 @@ class SlideChannel(models.Model):
                  if ptav:
                      ptav.write({'price_extra': 0.0})
 
+    def _sync_course_product(self):
+        """ 
+        Extiende la lógica de sincronización para manejar variantes blockchain.
+        Asegura que se cree un producto incluso si el curso es gratuito pero tiene certificación de pago.
+        """
+        super()._sync_course_product()
+        
+        Product = self.env['product.product']
+        for channel in self:
+            # Caso Especial: Curso gratuito/público pero con certificación blockchain de pago.
+            # elearning_academy solo crea producto si enroll == 'payment'.
+            # Aquí forzamos la creación si hay precio de certificación.
+            if not channel.product_id and channel.blockchain_certification_enabled and channel.blockchain_certification_price > 0:
+                product_vals = {
+                    'name': channel.name,
+                    'list_price': 0.0, # El curso base es gratis
+                    'type': 'service',
+                    'service_tracking': 'course',
+                    'invoice_policy': 'order',
+                    'is_published': True,
+                }
+                category = self.env.ref('product.product_category_all', raise_if_not_found=False)
+                if category:
+                    product_vals['categ_id'] = category.id
+                
+                product = Product.create(product_vals)
+                channel.product_id = product.id
+
+            # Si ya tenemos producto (creado por academy o por nosotros), gestionamos las variantes
+            if channel.product_id:
+                channel._update_product_variants()
+
     def write(self, vals):
         res = super().write(vals)
-        if 'blockchain_certification_enabled' in vals or 'blockchain_certification_price' in vals:
-            for record in self:
-                if record.product_id:
-                    record._update_product_variants()
+        # Sincronizar si cambian campos relevantes de blockchain
+        if any(f in vals for f in ['blockchain_certification_enabled', 'blockchain_certification_price']):
+            self._sync_course_product()
         return res
 
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
+        # Sincronización automática al crear
         for record in records:
-            if record.blockchain_certification_enabled and record.product_id:
-                record._update_product_variants()
+            if record.blockchain_certification_enabled:
+                record._sync_course_product()
         return records
 
     def _action_add_members(self, target_partners):
